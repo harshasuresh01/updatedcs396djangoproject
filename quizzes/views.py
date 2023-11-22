@@ -56,8 +56,9 @@ def quiz_detail(request, quiz_title):
         latest_attempt = attempts.first()
 
         if request.method == 'POST':
-            if 'retake_quiz' in request.POST:
-                return redirect('quizzes:quiz_detail', quiz_title=quiz.title)
+            if 'retake_quiz' in request.POST and remaining_attempts > 0:
+                latest_attempt = None
+                remaining_attempts += 1
             elif remaining_attempts > 0:
                 score = 0
                 for question in quiz.questions.all():
@@ -76,30 +77,17 @@ def quiz_detail(request, quiz_title):
                             question=question,
                             choice=selected_choice
                         )
+                latest_attempt = new_attempt
 
-                context = {
-                    'quiz': quiz,
-                    'latest_attempt': new_attempt,
-                    'remaining_attempts': 3 - Attempt.objects.filter(quiz=quiz, student=request.user).count(),
-                    'max_attempts': 3
-                }
-                return render(request, 'quizzes/quiz_detail_student.html', context)
-            else:
-                context = {
-                    'quiz': quiz,
-                    'error': "You have already taken this quiz 3 times.",
-                    'latest_attempt': latest_attempt,
-                    'remaining_attempts': remaining_attempts,
-                    'max_attempts': 3
-                }
-        else:
-            context = {
-                'quiz': quiz,
-                'latest_attempt': latest_attempt,
-                'remaining_attempts': remaining_attempts,
-                'max_attempts': 3
-            }
-            return render(request, 'quizzes/quiz_detail_student.html', context)
+        context = {
+            'quiz': quiz,
+            'latest_attempt': latest_attempt,
+            'remaining_attempts': remaining_attempts,
+            'max_attempts': 3
+        }
+        return render(request, 'quizzes/quiz_detail_student.html', context)
+
+
 
 
 

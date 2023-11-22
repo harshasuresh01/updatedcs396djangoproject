@@ -14,7 +14,7 @@
       <li>
         <a href="{% url 'quizzes:quiz_detail' quiz.title %}">{{ quiz.title }}</a>
         {% if attempt %}
-          - Score: {{ attempt.score }} (Taken {{ attempt.date_attempted|date:"M d, Y" }})
+          - Score: {{ attempt.score }}/{{ quiz.questions.count }} (Taken {{ attempt.date_attempted|date:"M d, Y" }})
           {% if attempt.attempts < 3 %}
             <a href="{% url 'quizzes:quiz_detail' quiz.title %}">(Retake)</a>
           {% endif %}
