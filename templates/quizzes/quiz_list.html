@@ -15,13 +15,38 @@
         <a href="{% url 'quizzes:quiz_detail' quiz.title %}">{{ quiz.title }}</a>
         {% if attempt %}
           - Score: {{ attempt.score }}/{{ quiz.questions.count }} (Taken {{ attempt.date_attempted|date:"M d, Y" }})
-          {% if attempt.attempts < 3 %}
-            <a href="{% url 'quizzes:quiz_detail' quiz.title %}">(Retake)</a>
-          {% endif %}
         {% else %}
           - Not taken
         {% endif %}
       </li>
     {% endfor %}
   </ul>
+
+  <!-- Canvas for Chart -->
+  <canvas id="scoreChart" width="400" height="400"></canvas>
+
+  <!-- JavaScript to render the chart -->
+  <script>
+      var ctx = document.getElementById('scoreChart').getContext('2d');
+      var scoreChart = new Chart(ctx, {
+          type: 'bar',
+          data: {
+              labels: {{ subject_labels|json_script:"chart-labels" }},
+              datasets: [{
+                  label: 'Average Scores by Subject',
+                  data: {{ subject_values|json_script:"chart-data" }},
+                  backgroundColor: 'rgba(0, 123, 255, 0.5)',
+                  borderColor: 'rgba(0, 123, 255, 1)',
+                  borderWidth: 1
+              }]
+          },
+          options: {
+              scales: {
+                  y: {
+                      beginAtZero: true
+                  }
+              }
+          }
+      });
+  </script>
 {% endblock %}

@@ -2,7 +2,7 @@ from django.http import HttpResponse, HttpResponseBadRequest
 from django.shortcuts import render, get_object_or_404, redirect
 from django.urls import reverse
 from django.contrib.auth.decorators import login_required
-from django.db.models import Count, Q
+from django.db.models import Count, Q, Avg
 
 from .models import Quiz, Attempt, Question, Choice, StudentAnswer
 from .forms import QuizForm, QuestionForm, ChoiceForm
@@ -10,13 +10,10 @@ from account.models import Account
 
 
 def quiz_list(request):
-    search_query = request.GET.get('q', '')  # Get the search term from the request
-
+    search_query = request.GET.get('q', '')
     if search_query:
-        # Filter quizzes based on the search term and sort them alphabetically
         quizzes = Quiz.objects.filter(title__icontains=search_query).order_by('title')
     else:
-        # Get all quizzes and sort them alphabetically
         quizzes = Quiz.objects.all().order_by('title')
 
     quizzes_with_attempts = []
@@ -24,12 +21,30 @@ def quiz_list(request):
         attempt = Attempt.objects.filter(quiz=quiz, student=request.user).order_by('-date_attempted').first()
         quizzes_with_attempts.append((quiz, attempt))
 
+    # New code to collect data for the chart
+    subject_scores = {}
+    for quiz in Quiz.objects.all():
+        subject = get_subject_from_title(quiz.title)
+        attempts = Attempt.objects.filter(quiz=quiz)
+        average_score = attempts.aggregate(Avg('score'))['score__avg'] or 0
+        if subject in subject_scores:
+            subject_scores[subject].append(average_score)
+        else:
+            subject_scores[subject] = [average_score]
+
+    # Calculate the average for each subject
+    for subject in subject_scores:
+        subject_scores[subject] = sum(subject_scores[subject]) / len(subject_scores[subject])
+
+    subject_labels = list(subject_scores.keys())
+    subject_values = list(subject_scores.values())
+
     return render(request, 'quizzes/quiz_list.html', {
         'quizzes_with_attempts': quizzes_with_attempts,
         'search_query': search_query,
-        'on_quizzes_page': True  # Add this line
+        'subject_labels': subject_labels,
+        'subject_values': subject_values,
     })
-
 
 
 
@@ -133,3 +148,17 @@ def create_quiz(request):
         quiz_form = QuizForm()
 
     return render(request, 'quizzes/create_quiz.html', {'quiz_form': quiz_form})
+
+
+
+
+
+
+
+
+def get_subject_from_title(title):
+    return title.split()[0]  # Assuming the first word is the subject
+
+
+
+
