@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<style type="text/css">
+    .card {
+        max-width: 700px;
+    }
+    .container {
+        padding: 20px;
+    }
+    .comment-list {
+        margin-top: 20px;
+    }
+    .comment {
+        border: 1px solid #ddd;
+        padding: 10px;
+        margin-bottom: 10px;
+    }
+    .comment p {
+        margin: 0;
+    }
+    .comment-form {
+        margin-top: 20px;
+    }
+</style>
+
+<div class="container text-center">
+    <div class="row">
+        <div class="card m-auto">
+            <img class="card-img-top" src="{{blog_post.image.url}}">
+            <div class="card-body my-2">
+                <h2 class="card-title">{{blog_post.title}}</h2>
+                <p class="card-text">{{blog_post.body|safe}}</p>
+                <p>
+                    {% if blog_post.author == request.user %}
+                        <a href="{% url 'blog:edit' blog_post.slug %}" class="btn btn-primary">Update</a>
+                    {% endif %}
+                </p>
+            </div>
+            <div class="card-footer text-muted">
+                Updated on {{blog_post.date_updated}} by {{blog_post.author}}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="comment-list text-center">
+    <h2></h2>
+    {% for comment in comments %}
+        <div class="comment">
+            <p>{{ comment.content }}</p>
+            <p>Posted by: {{ comment.author.username }}</p>
+            <p>Posted at: {{ comment.created_at }}</p>
+        </div>
+    {% empty %}
+        <div class="text-center">
+            <p></p>
+        </div>
+    {% endfor %}
+</div>
+
+<div class="comment-form text-center">
+    <h3>Add a Comment</h3>
+    <form method="post">
+        {% csrf_token %}
+        {{ comment_form.as_p }}
+        <button type="submit" class="btn btn-primary">Submit Comment</button>
+    </form>
+</div>
+
+{% endblock content %}
