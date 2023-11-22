@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+
+{% block content %}
+  <h2>Available Quizzes</h2>
+
+  <!-- Search Form -->
+  <form method="get" action="{% url 'quizzes:quiz_list' %}">
+      <input type="text" name="q" placeholder="Search quizzes...">
+      <button type="submit">Search</button>
+  </form>
+
+  <ul>
+    {% for quiz, attempt in quizzes_with_attempts %}
+      <li>
+        <a href="{% url 'quizzes:quiz_detail' quiz.title %}">{{ quiz.title }}</a>
+        {% if attempt %}
+          - Score: {{ attempt.score }} (Taken {{ attempt.date_attempted|date:"M d, Y" }})
+          {% if attempt.attempts < 3 %}
+            <a href="{% url 'quizzes:quiz_detail' quiz.title %}">(Retake)</a>
+          {% endif %}
+        {% else %}
+          - Not taken
+        {% endif %}
+      </li>
+    {% endfor %}
+  </ul>
+{% endblock %}
