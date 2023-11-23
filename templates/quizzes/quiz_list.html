@@ -25,16 +25,27 @@
   <!-- Canvas for Chart -->
   <canvas id="scoreChart" width="400" height="400"></canvas>
 
+  <!-- Safe output of data for JavaScript -->
+  <script id="chart-data" type="application/json">{{ subject_values|json_script:"chart-data" }}</script>
+  <script id="chart-labels" type="application/json">{{ subject_labels|json_script:"chart-labels" }}</script>
+
   <!-- JavaScript to render the chart -->
   <script>
+      console.log("Initializing Chart");
       var ctx = document.getElementById('scoreChart').getContext('2d');
+      var chartData = JSON.parse(document.getElementById('chart-data').textContent);
+      var chartLabels = JSON.parse(document.getElementById('chart-labels').textContent);
+
+      console.log("Labels:", chartLabels);
+      console.log("Data:", chartData);
+
       var scoreChart = new Chart(ctx, {
           type: 'bar',
           data: {
-              labels: {{ subject_labels|json_script:"chart-labels" }},
+              labels: chartLabels,
               datasets: [{
-                  label: 'Average Scores by Subject',
-                  data: {{ subject_values|json_script:"chart-data" }},
+                  label: 'Your Scores',
+                  data: chartData,
                   backgroundColor: 'rgba(0, 123, 255, 0.5)',
                   borderColor: 'rgba(0, 123, 255, 1)',
                   borderWidth: 1
