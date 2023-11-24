@@ -25,9 +25,10 @@
   <!-- Canvas for Chart -->
   <canvas id="scoreChart" width="400" height="400"></canvas>
 
+
   <!-- Safe output of data for JavaScript -->
-  <script id="chart-data" type="application/json">{{ subject_values|json_script:"chart-data" }}</script>
-  <script id="chart-labels" type="application/json">{{ subject_labels|json_script:"chart-labels" }}</script>
+  <script id="chart-data" type="application/json">{{ subject_values|safe }}</script>
+  <script id="chart-labels" type="application/json">{{ subject_labels|safe }}</script>
 
   <!-- JavaScript to render the chart -->
   <script>

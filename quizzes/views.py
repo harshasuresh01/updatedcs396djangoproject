@@ -1,3 +1,5 @@
+import json
+
 from django.http import HttpResponse, HttpResponseBadRequest
 from django.shortcuts import render, get_object_or_404, redirect
 from django.urls import reverse
@@ -7,6 +9,7 @@ from django.db.models import Count, Q, Avg
 from .models import Quiz, Attempt, Question, Choice, StudentAnswer
 from .forms import QuizForm, QuestionForm, ChoiceForm
 from account.models import Account
+
 
 
 @login_required
@@ -29,16 +32,18 @@ def quiz_list(request):
         else:
             student_scores[quiz.title] = None  # Or 0, depending on how you want to handle quizzes not taken
 
+    # Prepare data for the chart
     subject_labels = list(student_scores.keys())
-    subject_values = list(student_scores.values())
+    subject_values = [score if score is not None else 0 for score in student_scores.values()]  # Replace None with 0
 
-    print(subject_labels, subject_values)
+    subject_labels_json = json.dumps(subject_labels)
+    subject_values_json = json.dumps(subject_values)
 
     return render(request, 'quizzes/quiz_list.html', {
         'quizzes_with_attempts': quizzes_with_attempts,
         'search_query': search_query,
-        'subject_labels': subject_labels,
-        'subject_values': subject_values,
+        'subject_labels': subject_labels_json,
+        'subject_values': subject_values_json,
     })
 
 
