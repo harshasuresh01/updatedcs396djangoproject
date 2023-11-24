@@ -82,7 +82,7 @@ def quiz_detail(request, quiz_title):
     quiz = get_object_or_404(Quiz, title=quiz_title)
     user_account = Account.objects.get(email=request.user.email)
 
-    def calculate_percentile(attempt):
+    def calculate_percentile(attempt, quiz):
         all_scores = Attempt.objects.filter(quiz=quiz).order_by('score')
         higher_scores = all_scores.filter(score__gt=attempt.score).count()
         percentile = (1 - higher_scores / all_scores.count()) * 100
@@ -97,7 +97,7 @@ def quiz_detail(request, quiz_title):
         average_score = student_attempts.aggregate(Avg('score'))['score__avg']
 
         # Sorting
-        sort_by = request.GET.get('sort', 'score')  # Default sorting by score
+        sort_by = request.GET.get('sort', 'score')
         order = request.GET.get('order', 'desc')
         if order == 'desc':
             student_attempts = student_attempts.order_by(F'-{sort_by}')
@@ -105,7 +105,7 @@ def quiz_detail(request, quiz_title):
             student_attempts = student_attempts.order_by(sort_by)
 
         for attempt in student_attempts:
-            attempt.percentile = calculate_percentile(attempt)
+            attempt.percentile = calculate_percentile(attempt, quiz)
 
         context = {
             'quiz': quiz,
@@ -121,6 +121,9 @@ def quiz_detail(request, quiz_title):
         remaining_attempts = 3 - attempts.count()
         latest_attempt = attempts.first()
 
+        if latest_attempt:
+            latest_attempt.percentile = calculate_percentile(latest_attempt, quiz)
+
         if request.method == 'POST':
             if 'retake_quiz' in request.POST and remaining_attempts > 0:
                 latest_attempt = None
@@ -132,7 +135,7 @@ def quiz_detail(request, quiz_title):
                     if selected_choice_id and question.choices.get(id=selected_choice_id).is_correct:
                         score += 1
                 new_attempt = Attempt.objects.create(quiz=quiz, student=request.user, score=score)
-                new_attempt.percentile = calculate_percentile(new_attempt)
+                new_attempt.percentile = calculate_percentile(new_attempt, quiz)
 
                 for question in quiz.questions.all():
                     selected_choice_id = request.POST.get(f'question_{question.id}')
