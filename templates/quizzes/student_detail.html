@@ -6,6 +6,8 @@
   <p>Highest Score: {{ highest_score }}%</p>
   <p>Lowest Score: {{ lowest_score }}%</p>
   <p>Average Score: {{ average_score }}%</p>
+  <p>Weighted Score: {{ student.studentgrade.weighted_score }}%</p>
+  <p>Letter Grade: {{ student.studentgrade.grade }}</p>
 
   <!-- Sorting Links -->
   <a href="?sort=percentage_score&order=asc">Sort by Score Ascending</a> |

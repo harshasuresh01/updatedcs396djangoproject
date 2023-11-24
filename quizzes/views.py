@@ -10,6 +10,10 @@ from .models import Quiz, Attempt, Question, Choice, StudentAnswer
 from .forms import QuizForm, QuestionForm, ChoiceForm
 from account.models import Account
 from django.db.models import Max, Min, Avg, F
+from .models import QuizWeight, StudentGrade
+from django.contrib.auth.decorators import user_passes_test
+
+
 
 
 @login_required
@@ -24,6 +28,13 @@ def quiz_list(request):
     student_percentages = {}  # Dictionary to hold percentage scores for each quiz
 
     for quiz in quizzes:
+        # Add weight to each quiz
+        quiz_weight = QuizWeight.objects.filter(quiz=quiz).first()
+        if quiz_weight:
+            quiz.weight = quiz_weight.weight
+        else:
+            quiz.weight = 0
+
         attempt = Attempt.objects.filter(quiz=quiz, student=request.user).order_by('-date_attempted').first()
         quizzes_with_attempts.append((quiz, attempt))
 
@@ -43,12 +54,24 @@ def quiz_list(request):
     subject_labels_json = json.dumps(subject_labels)
     subject_values_json = json.dumps(subject_values)
 
+    # Calculate the weighted score for the logged-in student
+    if not request.user.is_teacher:
+        weighted_score = compute_weighted_score(request.user)
+        letter_grade = assign_letter_grade(weighted_score)
+    else:
+        weighted_score = None
+        letter_grade = None
+
     return render(request, 'quizzes/quiz_list.html', {
         'quizzes_with_attempts': quizzes_with_attempts,
+        'quizzes': quizzes,
         'search_query': search_query,
         'subject_labels': subject_labels_json,
         'subject_values': subject_values_json,
+        'weighted_score': weighted_score,
+        'letter_grade': letter_grade,
     })
+
 
 
 
@@ -250,4 +273,109 @@ def student_detail(request, student_id):
         'lowest_score': aggregate_values['lowest_score'],
         'average_score': aggregate_values['average_score']
     })
+
+
+
+
+
+
+def compute_weighted_score(student):
+    attempts = Attempt.objects.filter(student=student)
+    total_weighted_score = 0
+    total_weight = 0
+
+    for attempt in attempts:
+        quiz_weight = QuizWeight.objects.get(quiz=attempt.quiz).weight
+        total_questions = attempt.quiz.questions.count()
+        if total_questions > 0:
+            normalized_score = attempt.score / total_questions  # Normalize the score
+            total_weighted_score += normalized_score * quiz_weight
+        total_weight += quiz_weight
+
+    if total_weight > 0:
+        weighted_score_percentage = (total_weighted_score / total_weight) * 100
+        return round(weighted_score_percentage, 2)  # Round to 2 decimal places
+    else:
+        return 0
+
+
+
+def assign_letter_grade(weighted_score):
+    if weighted_score >= 90:
+        return 'A'
+    elif weighted_score >= 80:
+        return 'B'
+    elif weighted_score >= 70:
+        return 'C'
+    elif weighted_score >= 60:
+        return 'D'
+    elif weighted_score < 60:
+        return 'F'
+
+
+
+
+def update_student_grades():
+    for student in User.objects.filter(is_student=True):
+        weighted_score = compute_weighted_score(student)
+        grade = assign_letter_grade(weighted_score)
+        StudentGrade.objects.update_or_create(
+            student=student,
+            defaults={'grade': grade, 'weighted_score': weighted_score}
+        )
+
+
+
+
+
+
+
+@user_passes_test(lambda u: u.is_teacher)
+def set_quiz_weight(request):
+    if request.method == 'POST' and request.user.is_teacher:
+        # Get the quiz ID and weight from the POST request
+        quiz_id = request.POST.get('quiz_id')
+        weight = request.POST.get('weight')
+
+        # Ensure the weight is a valid number
+        try:
+            weight = float(weight)
+        except ValueError:
+            # Handle the error if weight is not a valid number
+            # Redirect to an error page or show a message
+            return redirect('error_view_name')  # Replace with your error view
+
+        # Get the quiz object
+        quiz = get_object_or_404(Quiz, id=quiz_id)
+
+        # Update or create the QuizWeight entry
+        QuizWeight.objects.update_or_create(
+            quiz=quiz,
+            defaults={'weight': weight}
+        )
+
+        # Redirect to a success page or the quiz list
+        return redirect('quizzes:quiz_list')  # Replace 'quizzes:quiz_list' with your desired redirect view
+    else:
+        # Redirect to home or an error page if the request is not POST or the user is not a teacher
+        return redirect('home_view_name')  # Replace with your home or error view
+
+
+
+
+
+@login_required
+def student_grades(request):
+    if not request.user.is_teacher:
+        return redirect('some_other_view')
+
+    students = Account.objects.filter(is_teacher=False)
+    for student in students:
+        student.weighted_score = compute_weighted_score(student)
+        student.letter_grade = assign_letter_grade(student.weighted_score)
+
+    return render(request, 'student_grades.html', {'students': students})
+
+
+
 

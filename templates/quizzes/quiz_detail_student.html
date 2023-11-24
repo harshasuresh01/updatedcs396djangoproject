@@ -24,7 +24,7 @@
       </form>
     {% else %}
       <p>Your score: {{ latest_attempt.score }}/{{ quiz.questions.count }}</p>
-      <p>Your percentile Among All Students: {{ latest_attempt.percentile }}%</p>
+      <p>Your Percentile Among All Students: {{ latest_attempt.percentile }}%</p>
       <ul>
         {% for question in quiz.questions.all %}
           <li>

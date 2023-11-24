@@ -1,5 +1,6 @@
 from django.db import models
 from django.conf import settings
+from django.contrib.auth.models import User
 
 
 class Quiz(models.Model):
@@ -52,4 +53,11 @@ class StudentAnswer(models.Model):
         return f"{self.attempt.student}'s answer to {self.question.text} is {self.choice.text}"
 
 
+class QuizWeight(models.Model):
+    quiz = models.ForeignKey(Quiz, on_delete=models.CASCADE)
+    weight = models.FloatField(default=1.0)
 
+class StudentGrade(models.Model):
+    student = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    grade = models.CharField(max_length=2)
+    weighted_score = models.FloatField()

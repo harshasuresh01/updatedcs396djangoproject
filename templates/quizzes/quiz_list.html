@@ -1,19 +1,33 @@
 {% extends 'base.html' %}
 
 {% block content %}
-  <h2>Available Quizzes</h2>
+  <!-- <h2>Available Quizzes</h2> -->
 
-  <!-- Link for teachers to view all students -->
   {% if request.user.is_teacher %}
     <a href="{% url 'quizzes:all_students' %}">View All Students</a>
+
+    <h3>Set Quiz Weight</h3>
+    <form method="post" action="{% url 'quizzes:set_quiz_weight' %}">
+      {% csrf_token %}
+      <select name="quiz_id">
+        {% for quiz in quizzes %}
+          <option value="{{ quiz.id }}">{{ quiz.title }}</option>
+        {% endfor %}
+      </select>
+      <input type="number" name="weight" min="0" step="0.1" placeholder="Weight">
+      <button type="submit">Set Weight</button>
+    </form>
+  {% else %}
+    <!-- Display weighted score and letter grade for students -->
+    <div>
+      <h3>Your Performance</h3>
+      <p>Weighted Score: {{ weighted_score|default:"N/A" }}%</p>
+      <p>Letter Grade: {{ letter_grade|default:"N/A" }}</p>
+    </div>
   {% endif %}
 
-  <!-- Flex Container with inline style for demonstration -->
   <div style="display: flex; justify-content: space-between;">
-
-    <!-- Quiz List -->
-    <div style="flex: 1; margin-right: 20px;"> <!-- Adjust margin as needed -->
-      <!-- Search Form -->
+    <div style="flex: 1; margin-right: 20px;">
       <form method="get" action="{% url 'quizzes:quiz_list' %}">
           <input type="text" name="q" placeholder="Search quizzes...">
           <button type="submit">Search</button>
@@ -23,6 +37,7 @@
         {% for quiz, attempt in quizzes_with_attempts %}
           <li>
             <a href="{% url 'quizzes:quiz_detail' quiz.title %}">{{ quiz.title }}</a>
+            - Weight: {{ quiz.weight }}
             {% if attempt %}
               - Score: {{ attempt.score }}/{{ quiz.questions.count }} (Taken {{ attempt.date_attempted|date:"M d, Y" }})
             {% else %}
@@ -33,26 +48,18 @@
       </ul>
     </div>
 
-    <!-- Chart Container -->
-    <div style="flex: 1;"> <!-- Adjust flex value as needed -->
+    <div style="flex: 1;">
       <canvas id="scoreChart" style="width: 400px; height: 300px;"></canvas>
     </div>
-
   </div>
 
-  <!-- Safe output of data for JavaScript -->
   <script id="chart-data" type="application/json">{{ subject_values|safe }}</script>
   <script id="chart-labels" type="application/json">{{ subject_labels|safe }}</script>
 
-  <!-- JavaScript to render the chart -->
   <script>
-      console.log("Initializing Chart");
       var ctx = document.getElementById('scoreChart').getContext('2d');
       var chartData = JSON.parse(document.getElementById('chart-data').textContent);
       var chartLabels = JSON.parse(document.getElementById('chart-labels').textContent);
-
-      console.log("Labels:", chartLabels);
-      console.log("Data:", chartData);
 
       var scoreChart = new Chart(ctx, {
           type: 'bar',
@@ -73,7 +80,7 @@
                   y: {
                       beginAtZero: true,
                       ticks: {
-                          callback: function(value, index, values) {
+                          callback: function(value) {
                               return value + '%';
                           }
                       }
