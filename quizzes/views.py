@@ -9,7 +9,7 @@ from django.db.models import Count, Q, Avg
 from .models import Quiz, Attempt, Question, Choice, StudentAnswer
 from .forms import QuizForm, QuestionForm, ChoiceForm
 from account.models import Account
-
+from django.db.models import Max, Min, Avg, F
 
 
 @login_required
@@ -21,20 +21,24 @@ def quiz_list(request):
         quizzes = Quiz.objects.all().order_by('title')
 
     quizzes_with_attempts = []
-    student_scores = {}  # Dictionary to hold scores for each quiz
+    student_percentages = {}  # Dictionary to hold percentage scores for each quiz
 
     for quiz in quizzes:
         attempt = Attempt.objects.filter(quiz=quiz, student=request.user).order_by('-date_attempted').first()
         quizzes_with_attempts.append((quiz, attempt))
 
         if attempt:
-            student_scores[quiz.title] = attempt.score
+            total_questions = quiz.questions.count()
+            if total_questions > 0:
+                percentage_score = (attempt.score / total_questions) * 100
+                student_percentages[quiz.title] = round(percentage_score, 2)
+            else:
+                student_percentages[quiz.title] = None
         else:
-            student_scores[quiz.title] = None  # Or 0, depending on how you want to handle quizzes not taken
+            student_percentages[quiz.title] = None
 
-    # Prepare data for the chart
-    subject_labels = list(student_scores.keys())
-    subject_values = [score if score is not None else 0 for score in student_scores.values()]  # Replace None with 0
+    subject_labels = list(student_percentages.keys())
+    subject_values = [percent if percent is not None else 0 for percent in student_percentages.values()]
 
     subject_labels_json = json.dumps(subject_labels)
     subject_values_json = json.dumps(subject_values)
@@ -45,6 +49,7 @@ def quiz_list(request):
         'subject_labels': subject_labels_json,
         'subject_values': subject_values_json,
     })
+
 
 
 
@@ -62,10 +67,32 @@ def quiz_detail(request, quiz_title):
 
     if user_account.is_teacher:
         student_attempts = Attempt.objects.filter(quiz=quiz).select_related('student')
+
+        # Calculate statistics
+        highest_score = student_attempts.aggregate(Max('score'))['score__max']
+        lowest_score = student_attempts.aggregate(Min('score'))['score__min']
+        average_score = student_attempts.aggregate(Avg('score'))['score__avg']
+
+        # Sorting
+        sort_by = request.GET.get('sort', 'score')  # Default sorting by score
+        order = request.GET.get('order', 'desc')
+        if order == 'desc':
+            student_attempts = student_attempts.order_by(F'-{sort_by}')
+        else:
+            student_attempts = student_attempts.order_by(sort_by)
+
         for attempt in student_attempts:
             attempt.percentile = calculate_percentile(attempt)
-        context = {'quiz': quiz, 'student_attempts': student_attempts}
+
+        context = {
+            'quiz': quiz,
+            'student_attempts': student_attempts,
+            'highest_score': highest_score,
+            'lowest_score': lowest_score,
+            'average_score': average_score
+        }
         return render(request, 'quizzes/quiz_detail_teacher.html', context)
+
     else:
         attempts = Attempt.objects.filter(quiz=quiz, student=request.user).order_by('-date_attempted')
         remaining_attempts = 3 - attempts.count()
@@ -74,7 +101,7 @@ def quiz_detail(request, quiz_title):
         if request.method == 'POST':
             if 'retake_quiz' in request.POST and remaining_attempts > 0:
                 latest_attempt = None
-                remaining_attempts += 1
+                remaining_attempts -= 1
             elif remaining_attempts > 0:
                 score = 0
                 for question in quiz.questions.all():
@@ -162,4 +189,65 @@ def get_subject_from_title(title):
 
 
 
+
+
+
+
+
+
+@login_required
+def all_students(request):
+    if not request.user.is_teacher:
+        return redirect('quizzes:quiz_list')
+
+    # Get all student accounts
+    students = Account.objects.filter(is_teacher=False)
+    return render(request, 'quizzes/all_students.html', {'students': students})
+
+
+
+
+
+
+@login_required
+def student_detail(request, student_id):
+    if not request.user.is_teacher:
+        return redirect('quizzes:quiz_list')
+
+    student = get_object_or_404(Account, id=student_id)
+
+    # Fetch all attempts made by the student
+    attempts = Attempt.objects.filter(student=student).select_related('quiz')
+
+    # Annotate each attempt with the total number of questions in the quiz
+    attempts = attempts.annotate(total_questions=Count('quiz__questions'))
+
+    # Calculate percentage scores
+    attempts = attempts.annotate(
+        percentage_score=100 * F('score') / F('total_questions')
+    )
+
+    # Sorting logic
+    sort_by = request.GET.get('sort', 'percentage_score')  # Default sort by percentage score
+    order = request.GET.get('order', 'asc')
+
+    if order == 'desc':
+        sort_by = '-' + sort_by
+
+    attempts = attempts.order_by(sort_by)
+
+    # Calculate aggregate values
+    aggregate_values = attempts.aggregate(
+        highest_score=Max('percentage_score'),
+        lowest_score=Min('percentage_score'),
+        average_score=Avg('percentage_score')
+    )
+
+    return render(request, 'quizzes/student_detail.html', {
+        'student': student,
+        'attempts': attempts,
+        'highest_score': aggregate_values['highest_score'],
+        'lowest_score': aggregate_values['lowest_score'],
+        'average_score': aggregate_values['average_score']
+    })
 

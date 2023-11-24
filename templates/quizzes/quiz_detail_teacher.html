@@ -2,15 +2,29 @@
 
 {% block content %}
   <style>
-    /* CSS to add padding to table cells */
     .padded-cell {
-      padding-left: 20px; /* Adjust this value as needed for desired spacing */
+      padding-left: 20px;
       padding-right: 20px;
     }
   </style>
 
   <h1>{{ quiz.title }}</h1>
   <h2>Student Attempts</h2>
+
+  <!-- Statistics -->
+  <p>Highest Score: {{ highest_score }}</p>
+  <p>Lowest Score: {{ lowest_score }}</p>
+  <p>Average Score: {{ average_score }}</p>
+
+  <!-- Sorting Links -->
+  <p>
+    Sort by: 
+    <a href="?sort=score&order=asc">Score Ascending</a> |
+    <a href="?sort=score&order=desc">Score Descending</a> |
+    <a href="?sort=date_attempted&order=asc">Date Ascending</a> |
+    <a href="?sort=date_attempted&order=desc">Date Descending</a>
+  </p>
+
   <table>
     <tr>
       <th style="text-align: center;">Student</th>
