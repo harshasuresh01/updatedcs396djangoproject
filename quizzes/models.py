@@ -61,3 +61,6 @@ class StudentGrade(models.Model):
     student = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     grade = models.CharField(max_length=2)
     weighted_score = models.FloatField()
+
+    def __str__(self):
+        return f"{self.student}'s grade: {self.grade}, weighted score: {self.weighted_score}"

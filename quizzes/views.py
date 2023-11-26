@@ -62,6 +62,12 @@ def quiz_list(request):
         weighted_score = None
         letter_grade = None
 
+
+    if request.user.is_teacher:
+        letter_grade_labels, letter_grade_counts = compute_letter_grade_distribution()
+    else:
+        letter_grade_labels, letter_grade_counts = None, None
+
     return render(request, 'quizzes/quiz_list.html', {
         'quizzes_with_attempts': quizzes_with_attempts,
         'quizzes': quizzes,
@@ -70,6 +76,8 @@ def quiz_list(request):
         'subject_values': subject_values_json,
         'weighted_score': weighted_score,
         'letter_grade': letter_grade,
+        'letter_grade_labels': json.dumps(letter_grade_labels) if letter_grade_labels is not None else None,
+        'letter_grade_counts': json.dumps(letter_grade_counts) if letter_grade_counts is not None else None,
     })
 
 
@@ -82,71 +90,57 @@ def quiz_detail(request, quiz_title):
     quiz = get_object_or_404(Quiz, title=quiz_title)
     user_account = Account.objects.get(email=request.user.email)
 
-    def calculate_percentile(attempt, quiz):
-        all_scores = Attempt.objects.filter(quiz=quiz).order_by('score')
-        higher_scores = all_scores.filter(score__gt=attempt.score).count()
-        percentile = (1 - higher_scores / all_scores.count()) * 100
-        return round(percentile, 2)
-
     if user_account.is_teacher:
         student_attempts = Attempt.objects.filter(quiz=quiz).select_related('student')
 
-        # Calculate statistics
-        highest_score = student_attempts.aggregate(Max('score'))['score__max']
-        lowest_score = student_attempts.aggregate(Min('score'))['score__min']
-        average_score = student_attempts.aggregate(Avg('score'))['score__avg']
-
-        # Sorting
-        sort_by = request.GET.get('sort', 'score')
-        order = request.GET.get('order', 'desc')
+        # Sorting logic
+        sort_by = request.GET.get('sort', 'score')  # Default sort by score
+        order = request.GET.get('order', 'asc')
         if order == 'desc':
-            student_attempts = student_attempts.order_by(F'-{sort_by}')
-        else:
-            student_attempts = student_attempts.order_by(sort_by)
+            sort_by = '-' + sort_by
+        student_attempts = student_attempts.order_by(sort_by)
 
+        # Calculate additional details for each attempt
         for attempt in student_attempts:
             attempt.percentile = calculate_percentile(attempt, quiz)
+
+        highest_score = student_attempts.aggregate(Max('score'))['score__max']
+        lowest_score = student_attempts.aggregate(Min('score'))['score__min']
+        total_questions = quiz.questions.count()
+        if total_questions > 0:
+            average_score = student_attempts.aggregate(Avg('score'))['score__avg']
+            average_percentage_score = (average_score / total_questions) * 100
+        else:
+            average_percentage_score = None
+
+        # Calculate letter grade distribution for the pie chart
+        grade_distribution = {}
+        for attempt in student_attempts:
+            letter_grade = assign_letter_grade((attempt.score / total_questions) * 100)
+            grade_distribution[letter_grade] = grade_distribution.get(letter_grade, 0) + 1
+
+        grade_labels = list(grade_distribution.keys())
+        grade_counts = list(grade_distribution.values())
 
         context = {
             'quiz': quiz,
             'student_attempts': student_attempts,
             'highest_score': highest_score,
             'lowest_score': lowest_score,
-            'average_score': average_score
+            'average_score': average_percentage_score,  # Updated line
+            'letter_grade_labels': json.dumps(grade_labels),
+            'letter_grade_counts': json.dumps(grade_counts)
         }
         return render(request, 'quizzes/quiz_detail_teacher.html', context)
 
     else:
+        # Code for non-teacher users
         attempts = Attempt.objects.filter(quiz=quiz, student=request.user).order_by('-date_attempted')
         remaining_attempts = 3 - attempts.count()
         latest_attempt = attempts.first()
 
         if latest_attempt:
             latest_attempt.percentile = calculate_percentile(latest_attempt, quiz)
-
-        if request.method == 'POST':
-            if 'retake_quiz' in request.POST and remaining_attempts > 0:
-                latest_attempt = None
-                remaining_attempts -= 1
-            elif remaining_attempts > 0:
-                score = 0
-                for question in quiz.questions.all():
-                    selected_choice_id = request.POST.get(f'question_{question.id}')
-                    if selected_choice_id and question.choices.get(id=selected_choice_id).is_correct:
-                        score += 1
-                new_attempt = Attempt.objects.create(quiz=quiz, student=request.user, score=score)
-                new_attempt.percentile = calculate_percentile(new_attempt, quiz)
-
-                for question in quiz.questions.all():
-                    selected_choice_id = request.POST.get(f'question_{question.id}')
-                    if selected_choice_id:
-                        selected_choice = Choice.objects.get(id=selected_choice_id)
-                        StudentAnswer.objects.create(
-                            attempt=new_attempt,
-                            question=question,
-                            choice=selected_choice
-                        )
-                latest_attempt = new_attempt
 
         context = {
             'quiz': quiz,
@@ -269,12 +263,18 @@ def student_detail(request, student_id):
         average_score=Avg('percentage_score')
     )
 
+    # Calculate weighted score and letter grade for the student
+    weighted_score = compute_weighted_score(student)
+    letter_grade = assign_letter_grade(weighted_score)
+
     return render(request, 'quizzes/student_detail.html', {
         'student': student,
         'attempts': attempts,
         'highest_score': aggregate_values['highest_score'],
         'lowest_score': aggregate_values['lowest_score'],
-        'average_score': aggregate_values['average_score']
+        'average_score': aggregate_values['average_score'],
+        'weighted_score': weighted_score,
+        'letter_grade': letter_grade
     })
 
 
@@ -378,6 +378,33 @@ def student_grades(request):
         student.letter_grade = assign_letter_grade(student.weighted_score)
 
     return render(request, 'student_grades.html', {'students': students})
+
+
+
+
+def compute_letter_grade_distribution():
+    grades = StudentGrade.objects.values('grade').annotate(count=Count('grade'))
+    grade_labels = [grade['grade'] for grade in grades]
+    grade_counts = [grade['count'] for grade in grades]
+    return grade_labels, grade_counts
+
+
+
+
+
+
+
+
+
+def calculate_percentile(attempt, quiz):
+    all_attempts = Attempt.objects.filter(quiz=quiz).exclude(id=attempt.id)
+    higher = sum(1 for other_attempt in all_attempts if other_attempt.score > attempt.score)
+    equal = sum(1 for other_attempt in all_attempts if other_attempt.score == attempt.score)
+    percentile_rank = (higher + 0.5 * equal) / all_attempts.count() * 100
+    return round(percentile_rank, 2)
+
+
+
 
 
 

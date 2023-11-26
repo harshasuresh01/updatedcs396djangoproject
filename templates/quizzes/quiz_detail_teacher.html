@@ -6,7 +6,18 @@
       padding-left: 20px;
       padding-right: 20px;
     }
+
+    #chartContainer {
+      float: right;
+      margin-left: 20px;
+      margin-top: 150px; /* Adjust the top margin to move the chart higher up */
+    }
   </style>
+
+  <div id="chartContainer">
+    <!-- Pie Chart for Grade Distribution -->
+    <canvas id="gradeDistributionChart" width="400" height="300"></canvas>
+  </div>
 
   <h1>{{ quiz.title }}</h1>
   <h2>Student Attempts</h2>
@@ -14,7 +25,8 @@
   <!-- Statistics -->
   <p>Highest Score: {{ highest_score }}</p>
   <p>Lowest Score: {{ lowest_score }}</p>
-  <p>Average Score: {{ average_score }}</p>
+  <!-- <p>Average Score: {{ average_score }}</p> -->
+  <p>Average Score: {{ average_score|floatformat:2 }}%</p>
 
   <!-- Sorting Links -->
   <p>
@@ -45,5 +57,31 @@
       </tr>
     {% endfor %}
   </table>
+
   <a href="{% url 'quizzes:quiz_list' %}">Back to Quizzes</a>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+  var gradeLabels = JSON.parse('{{ letter_grade_labels|safe }}');
+  var gradeCounts = JSON.parse('{{ letter_grade_counts|safe }}');
+
+  var ctx = document.getElementById('gradeDistributionChart').getContext('2d');
+  var gradeDistributionChart = new Chart(ctx, {
+      type: 'pie',
+      data: {
+          labels: gradeLabels,
+          datasets: [{
+              data: gradeCounts,
+              backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF'],
+              borderColor: ['#FFFFFF', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#FFFFFF'],
+          }]
+      },
+      options: {
+          responsive: false,
+          // other options
+      }
+  });
+</script>
+
 {% endblock %}
